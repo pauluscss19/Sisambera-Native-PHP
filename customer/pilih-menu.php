@@ -2,20 +2,31 @@
 require_once '../config/config.php';
 $page_title = 'Pilih Menu - Sambal Belut Bu Raden';
 
-// Error message handling
+// ===== STEP 1: TERIMA DATA POST DARI ISI-DATA-DIRI =====
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['nama'])) {
+    $_SESSION['nama'] = trim($_POST['nama']);
+    $_SESSION['no_hp'] = trim($_POST['no_hp']);
+    $_SESSION['catatan'] = isset($_POST['catatan']) ? trim($_POST['catatan']) : '';
+    
+    // Redirect ke halaman ini lagi (GET method) untuk menghindari resubmit
+    header('Location: pilih-menu.php');
+    exit();
+}
+
+// ===== STEP 2: ERROR MESSAGE HANDLING =====
 $error_message = '';
 if (isset($_SESSION['error_message'])) {
     $error_message = $_SESSION['error_message'];
     unset($_SESSION['error_message']);
 }
 
-// Redirect jika belum pilih layanan
+// ===== STEP 3: VALIDASI SETELAH DATA TERSIMPAN =====
 if (!isset($_SESSION['layanan_id']) || !isset($_SESSION['nama'])) {
     header('Location: pilih-layanan.php');
     exit();
 }
 
-// Initialize cart
+// ===== STEP 4: INITIALIZE CART =====
 if (!isset($_SESSION['cart'])) {
     $_SESSION['cart'] = [];
 }
@@ -188,12 +199,10 @@ $total = $subtotal + $pajak;
 
 <script>
 function filterKategori(kategori, btn) {
-    // Update active tab
     const tabs = document.querySelectorAll('.menu-tab');
     tabs.forEach(tab => tab.classList.remove('active'));
     btn.classList.add('active');
     
-    // Show/hide sections
     const sections = document.querySelectorAll('.kategori-section');
     sections.forEach(section => {
         if (kategori === 'all' || section.dataset.kategori === kategori) {
