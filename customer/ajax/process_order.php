@@ -1,33 +1,51 @@
 <?php
 session_start();
-require_once '../../config/config.php';  // ← PATH YANG BENAR
+require_once '../../config/config.php';
 
-// Debug mode
+// DEBUG MODE - Hapus ini setelah selesai testing
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// Validasi session
-if (!isset($_SESSION['layanan_id']) || !isset($_SESSION['nama']) || !isset($_SESSION['cart']) || empty($_SESSION['cart'])) {
-    die("Error: Data tidak lengkap. <a href='../pilih-layanan.php'>Kembali</a>");
+// ===== VALIDASI SESSION DATA =====
+$missing = [];
+if (!isset($_SESSION['layanan_id'])) $missing[] = 'layanan_id';
+if (!isset($_SESSION['nama'])) $missing[] = 'nama';
+if (!isset($_SESSION['no_hp'])) $missing[] = 'no_hp';
+if (!isset($_SESSION['cart']) || empty($_SESSION['cart'])) $missing[] = 'cart';
+
+// Jika ada data yang kurang
+if (!empty($missing)) {
+    $_SESSION['error_message'] = "❌ Data tidak lengkap: " . implode(", ", $missing) . ". Silakan mulai dari awal.";
+    header('Location: ../pilih-layanan.php');
+    exit();
 }
 
-// Validasi POST
-if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !isset($_POST['metode_pembayaran'])) {
-    die("Error: Method tidak valid. <a href='../metode-pembayaran.php'>Kembali</a>");
+// ===== VALIDASI REQUEST METHOD =====
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    $_SESSION['error_message'] = "❌ Invalid request method";
+    header('Location: ../metode-pembayaran.php');
+    exit();
 }
 
+// ===== VALIDASI METODE PEMBAYARAN =====
+if (!isset($_POST['metode_pembayaran']) || empty($_POST['metode_pembayaran'])) {
+    $_SESSION['error_message'] = "❌ Metode pembayaran belum dipilih";
+    header('Location: ../metode-pembayaran.php');
+    exit();
+}
+
+// ===== AMBIL DATA DARI SESSION & POST =====
 $conn = getConnection();
 
-// Get data from session and POST
 $layanan_id = intval($_SESSION['layanan_id']);
 $nama = $conn->real_escape_string($_SESSION['nama']);
 $no_hp = $conn->real_escape_string($_SESSION['no_hp']);
 $catatan = isset($_SESSION['catatan']) ? $conn->real_escape_string($_SESSION['catatan']) : '';
 $metode = $conn->real_escape_string($_POST['metode_pembayaran']);
-$bank = isset($_POST['bank']) && $_POST['bank'] ? $conn->real_escape_string($_POST['bank']) : null;
+$bank = isset($_POST['bank']) && !empty($_POST['bank']) ? $conn->real_escape_string($_POST['bank']) : null;
 $cart = $_SESSION['cart'];
 
-// ========== VALIDASI STOK ==========
+// ===== VALIDASI STOK SEBELUM PROSES =====
 $error_stok = [];
 foreach($cart as $item) {
     $menu_id = intval($item['menu_id']);
@@ -52,7 +70,7 @@ if (count($error_stok) > 0) {
     exit();
 }
 
-// Calculate totals
+// ===== HITUNG TOTAL =====
 $subtotal = 0;
 foreach($cart as $item) {
     $subtotal += floatval($item['harga']) * intval($item['qty']);
@@ -60,7 +78,7 @@ foreach($cart as $item) {
 $pajak = $subtotal * 0.1;
 $total = $subtotal + $pajak;
 
-// Generate nomor antrian
+// ===== GENERATE NOMOR ANTRIAN =====
 $today = date('Y-m-d');
 $query = "SELECT COUNT(*) as total FROM pesanan WHERE DATE(tanggal) = '$today'";
 $result = $conn->query($query);
@@ -68,24 +86,29 @@ $row = $result->fetch_assoc();
 $number = $row['total'] + 1;
 $nomor_antrian = 'A' . str_pad($number, 3, '0', STR_PAD_LEFT);
 
-// Check/Create user
+// ===== CEK/BUAT USER =====
 $check_user = "SELECT user_id FROM user WHERE no_hp = '$no_hp'";
 $result = $conn->query($check_user);
 
 if ($result->num_rows > 0) {
     $user = $result->fetch_assoc();
     $user_id = intval($user['user_id']);
-    $conn->query("UPDATE user SET nama = '$nama' WHERE user_id = $user_id");
+    
+    // Update nama jika berbeda
+    $update_user = "UPDATE user SET nama = '$nama' WHERE user_id = $user_id";
+    $conn->query($update_user);
 } else {
     $insert_user = "INSERT INTO user (nama, no_hp) VALUES ('$nama', '$no_hp')";
     if ($conn->query($insert_user)) {
         $user_id = $conn->insert_id;
     } else {
-        die("Error creating user: " . $conn->error);
+        $_SESSION['error_message'] = "❌ Error creating user: " . $conn->error;
+        header('Location: ../pilih-menu.php');
+        exit();
     }
 }
 
-// Start transaction
+// ===== MULAI TRANSACTION =====
 $conn->begin_transaction();
 
 try {
@@ -100,7 +123,7 @@ try {
     
     $pesanan_id = $conn->insert_id;
     
-    // Insert detail pesanan DAN kurangi stok
+    // ===== INSERT DETAIL PESANAN & KURANGI STOK =====
     foreach($cart as $item) {
         $menu_id = intval($item['menu_id']);
         $qty = intval($item['qty']);
@@ -115,13 +138,13 @@ try {
             throw new Exception("Error insert detail: " . $conn->error);
         }
         
-        // ========== KURANGI STOK ==========
+        // KURANGI STOK
         $update_stok = "UPDATE menu SET stok = stok - $qty WHERE menu_id = $menu_id";
         if (!$conn->query($update_stok)) {
-            throw new Exception("Error update stok menu_id $menu_id: " . $conn->error);
+            throw new Exception("Error update stok: " . $conn->error);
         }
         
-        // Check if stok <= 0, update status to 'habis'
+        // CEK JIKA STOK HABIS
         $check_stok = "SELECT stok FROM menu WHERE menu_id = $menu_id";
         $result_check = $conn->query($check_stok);
         $stok_data = $result_check->fetch_assoc();
@@ -132,7 +155,12 @@ try {
         }
     }
     
-    // Insert pembayaran (WITH BANK SUPPORT)
+    // ===== INSERT PEMBAYARAN =====
+    // Pastikan bank NULL jika tidak ada atau metode bukan transfer
+    if ($metode !== 'transfer' || !$bank) {
+        $bank = null;
+    }
+    
     $bank_value = $bank ? "'$bank'" : 'NULL';
     $insert_pembayaran = "INSERT INTO pembayaran (pesanan_id, metode, bank, total, status) 
                           VALUES ($pesanan_id, '$metode', $bank_value, $total, 'pending')";
@@ -141,10 +169,10 @@ try {
         throw new Exception("Error insert pembayaran: " . $conn->error);
     }
     
-    // Commit transaction
+    // ===== COMMIT TRANSACTION =====
     $conn->commit();
     
-    // Save to session
+    // ===== SIMPAN KE SESSION =====
     $_SESSION['pesanan_id'] = $pesanan_id;
     $_SESSION['nomor_antrian'] = $nomor_antrian;
     $_SESSION['metode_pembayaran'] = $metode;
@@ -154,21 +182,22 @@ try {
     // Clear cart
     unset($_SESSION['cart']);
     
-    // Redirect based on payment method
+    // ===== REDIRECT BERDASARKAN METODE =====
     if ($metode == 'cash') {
         header('Location: ../status-pesanan.php');
     } else {
+        // QRIS atau TRANSFER
         header('Location: ../konfirmasi.php');
     }
     exit();
     
 } catch (Exception $e) {
-    // Rollback
+    // ROLLBACK jika ada error
     $conn->rollback();
-    $_SESSION['error_message'] = "Terjadi kesalahan: " . $e->getMessage();
+    $_SESSION['error_message'] = "❌ Terjadi kesalahan saat memproses pesanan: " . $e->getMessage();
     header('Location: ../pilih-menu.php');
     exit();
+} finally {
+    $conn->close();
 }
-
-$conn->close();
 ?>
