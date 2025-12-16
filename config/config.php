@@ -3,7 +3,7 @@
 define('DB_HOST', 'localhost');
 define('DB_USER', 'root');
 define('DB_PASS', '');
-define('DB_NAME', 'sambal_belut_buraden NEW');
+define('DB_NAME', 'sambal_belut_buraden');
 
 // Create connection
 function getConnection() {
