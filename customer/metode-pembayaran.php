@@ -14,8 +14,8 @@ $subtotal = 0;
 foreach ($_SESSION['cart'] as $item) {
     $subtotal += $item['harga'] * $item['qty'];
 }
-$pajak = $subtotal * 0.1;
-$total = $subtotal + $pajak;
+$pajak = 0;
+$total = $subtotal;
 ?>
 
 <div class="breadcrumb">
@@ -124,10 +124,6 @@ $total = $subtotal + $pajak;
                 <div class="summary-subtotal">
                     <span>Subtotal</span>
                     <span><?php echo formatRupiah($subtotal); ?></span>
-                </div>
-                <div class="summary-fee">
-                    <span>Pajak (10%)</span>
-                    <span><?php echo formatRupiah($pajak); ?></span>
                 </div>
                 <div class="summary-total">
                     <span>Total</span>

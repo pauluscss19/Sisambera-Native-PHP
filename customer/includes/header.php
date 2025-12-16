@@ -17,7 +17,7 @@ if (session_status() == PHP_SESSION_NONE) {
         <nav>
             <a href="index.php">Beranda</a>
             <a href="pilih-layanan.php">Menu</a>
-            <a href="#">Tentang</a>
+            <a href="tentang.php">Tentang</a>
         </nav>
         <button class="order-btn" onclick="window.location.href='pilih-layanan.php'">Pesan Sekarang</button>
     </header>

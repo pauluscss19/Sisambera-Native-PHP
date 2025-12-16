@@ -1,18 +1,30 @@
 <?php
 // admin/config/config.php - Database Configuration
+
+// 1) Pastikan timezone PHP sesuai WIB (penting untuk date(), strtotime(), dll)
+date_default_timezone_set('Asia/Jakarta');
+
 define('DB_HOST', 'localhost');
 define('DB_USER', 'root');
 define('DB_PASS', '');
 define('DB_NAME', 'sambal_belut_buraden');
 
 // Create connection
-function getConnection() {
+function getConnection()
+{
     $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
-    
+
     if ($conn->connect_error) {
         die("Connection failed: " . $conn->connect_error);
     }
-    
+
+    // 2) Set charset
+    $conn->set_charset('utf8mb4');
+
+    // 3) Paksa timezone MySQL per-connection ke WIB (+07:00)
+    // Supaya NOW(), CURDATE(), dll konsisten
+    $conn->query("SET time_zone = '+07:00'");
+
     return $conn;
 }
 
@@ -22,12 +34,14 @@ if (session_status() == PHP_SESSION_NONE) {
 }
 
 // Check if admin is logged in
-function isAdminLoggedIn() {
+function isAdminLoggedIn()
+{
     return isset($_SESSION['admin_id']);
 }
 
 // Redirect to login if not logged in
-function requireLogin() {
+function requireLogin()
+{
     if (!isAdminLoggedIn()) {
         header('Location: login.php');
         exit();
@@ -35,31 +49,38 @@ function requireLogin() {
 }
 
 // Format currency
-function formatRupiah($angka) {
+function formatRupiah($angka)
+{
     return 'Rp ' . number_format($angka, 0, ',', '.');
 }
 
 // Generate nomor antrian
-function generateNomorAntrian($conn) {
+function generateNomorAntrian($conn)
+{
+    // Dengan timezone PHP sudah Asia/Jakarta, ini sudah sesuai WIB
     $today = date('Y-m-d');
-    $query = "SELECT COUNT(*) as total FROM pesanan WHERE DATE(tanggal) = '$today'";
+
+    $query = "SELECT COUNT(*) as total
+              FROM pesanan
+              WHERE DATE(tanggal) = '$today'";
     $result = $conn->query($query);
     $row = $result->fetch_assoc();
     $number = $row['total'] + 1;
-    
+
     $prefix = 'A';
     return $prefix . str_pad($number, 3, '0', STR_PAD_LEFT);
 }
 
 // Update status bahan berdasarkan jumlah
-function updateStatusBahan($conn, $bahan_id) {
+function updateStatusBahan($conn, $bahan_id)
+{
     $query = "SELECT jumlah, minimum_stok FROM bahan WHERE bahan_id = $bahan_id";
     $result = $conn->query($query);
     $row = $result->fetch_assoc();
-    
+
     $jumlah = $row['jumlah'];
     $minimum = $row['minimum_stok'];
-    
+
     if ($jumlah <= ($minimum * 0.5)) {
         $status = 'very-low';
     } elseif ($jumlah <= $minimum) {
@@ -67,13 +88,14 @@ function updateStatusBahan($conn, $bahan_id) {
     } else {
         $status = 'safe';
     }
-    
+
     $update = "UPDATE bahan SET status = '$status' WHERE bahan_id = $bahan_id";
     $conn->query($update);
 }
 
 // Get admin name
-function getAdminName() {
+function getAdminName()
+{
     if (isset($_SESSION['admin_nama'])) {
         return $_SESSION['admin_nama'];
     }
@@ -81,7 +103,8 @@ function getAdminName() {
 }
 
 // Get admin email (username@domain)
-function getAdminEmail() {
+function getAdminEmail()
+{
     if (isset($_SESSION['admin_username'])) {
         return $_SESSION['admin_username'] . '@sambalbelut.com';
     }
@@ -89,7 +112,8 @@ function getAdminEmail() {
 }
 
 // Get layanan name by ID
-function getLayananName($conn, $layanan_id) {
+function getLayananName($conn, $layanan_id)
+{
     $query = "SELECT jenis_layanan FROM layanan WHERE layanan_id = $layanan_id";
     $result = $conn->query($query);
     if ($result && $row = $result->fetch_assoc()) {
@@ -99,7 +123,8 @@ function getLayananName($conn, $layanan_id) {
 }
 
 // Get status badge color HTML
-function getStatusBadge($status) {
+function getStatusBadge($status)
+{
     $badges = [
         'pending' => '<span style="background: #ffc107; color: #000; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;">Pending</span>',
         'dikonfirmasi' => '<span style="background: #2196F3; color: #fff; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;">Dikonfirmasi</span>',
@@ -111,7 +136,8 @@ function getStatusBadge($status) {
 }
 
 // Get payment status badge
-function getPaymentBadge($status) {
+function getPaymentBadge($status)
+{
     $badges = [
         'pending' => '<span style="color: #ff9800; font-weight: 600;">⏳ Pending</span>',
         'berhasil' => '<span style="color: #4caf50; font-weight: 600;">✅ Berhasil</span>',
@@ -119,4 +145,3 @@ function getPaymentBadge($status) {
     ];
     return $badges[$status] ?? ucfirst($status);
 }
-?>

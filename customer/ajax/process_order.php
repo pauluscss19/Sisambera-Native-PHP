@@ -47,16 +47,16 @@ $cart = $_SESSION['cart'];
 
 // ===== VALIDASI STOK SEBELUM PROSES =====
 $error_stok = [];
-foreach($cart as $item) {
+foreach ($cart as $item) {
     $menu_id = intval($item['menu_id']);
     $qty_order = intval($item['qty']);
-    
+
     $check_stok = "SELECT stok, nama_menu FROM menu WHERE menu_id = $menu_id";
     $result_stok = $conn->query($check_stok);
-    
+
     if ($result_stok && $result_stok->num_rows > 0) {
         $menu_data = $result_stok->fetch_assoc();
-        
+
         if ($menu_data['stok'] < $qty_order) {
             $error_stok[] = $menu_data['nama_menu'] . " (Stok: " . $menu_data['stok'] . ", Pesan: " . $qty_order . ")";
         }
@@ -72,11 +72,11 @@ if (count($error_stok) > 0) {
 
 // ===== HITUNG TOTAL =====
 $subtotal = 0;
-foreach($cart as $item) {
+foreach ($cart as $item) {
     $subtotal += floatval($item['harga']) * intval($item['qty']);
 }
-$pajak = $subtotal * 0.1;
-$total = $subtotal + $pajak;
+$pajak = 0;
+$total = $subtotal;
 
 // ===== GENERATE NOMOR ANTRIAN =====
 $today = date('Y-m-d');
@@ -93,7 +93,7 @@ $result = $conn->query($check_user);
 if ($result->num_rows > 0) {
     $user = $result->fetch_assoc();
     $user_id = intval($user['user_id']);
-    
+
     // Update nama jika berbeda
     $update_user = "UPDATE user SET nama = '$nama' WHERE user_id = $user_id";
     $conn->query($update_user);
@@ -116,72 +116,72 @@ try {
     $tanggal = date('Y-m-d H:i:s');
     $insert_pesanan = "INSERT INTO pesanan (user_id, layanan_id, tanggal, status, total_harga, nomor_antrian) 
                        VALUES ($user_id, $layanan_id, '$tanggal', 'pending', $total, '$nomor_antrian')";
-    
+
     if (!$conn->query($insert_pesanan)) {
         throw new Exception("Error insert pesanan: " . $conn->error);
     }
-    
+
     $pesanan_id = $conn->insert_id;
-    
+
     // ===== INSERT DETAIL PESANAN & KURANGI STOK =====
-    foreach($cart as $item) {
+    foreach ($cart as $item) {
         $menu_id = intval($item['menu_id']);
         $qty = intval($item['qty']);
         $harga = floatval($item['harga']);
         $item_subtotal = $harga * $qty;
-        
+
         // Insert detail pesanan
         $insert_detail = "INSERT INTO detail_pesanan (pesanan_id, menu_id, jumlah, harga_satuan, subtotal) 
                           VALUES ($pesanan_id, $menu_id, $qty, $harga, $item_subtotal)";
-        
+
         if (!$conn->query($insert_detail)) {
             throw new Exception("Error insert detail: " . $conn->error);
         }
-        
+
         // KURANGI STOK
         $update_stok = "UPDATE menu SET stok = stok - $qty WHERE menu_id = $menu_id";
         if (!$conn->query($update_stok)) {
             throw new Exception("Error update stok: " . $conn->error);
         }
-        
+
         // CEK JIKA STOK HABIS
         $check_stok = "SELECT stok FROM menu WHERE menu_id = $menu_id";
         $result_check = $conn->query($check_stok);
         $stok_data = $result_check->fetch_assoc();
-        
+
         if ($stok_data['stok'] <= 0) {
             $update_status = "UPDATE menu SET status = 'habis', stok = 0 WHERE menu_id = $menu_id";
             $conn->query($update_status);
         }
     }
-    
+
     // ===== INSERT PEMBAYARAN =====
     // Pastikan bank NULL jika tidak ada atau metode bukan transfer
     if ($metode !== 'transfer' || !$bank) {
         $bank = null;
     }
-    
+
     $bank_value = $bank ? "'$bank'" : 'NULL';
     $insert_pembayaran = "INSERT INTO pembayaran (pesanan_id, metode, bank, total, status) 
                           VALUES ($pesanan_id, '$metode', $bank_value, $total, 'pending')";
-    
+
     if (!$conn->query($insert_pembayaran)) {
         throw new Exception("Error insert pembayaran: " . $conn->error);
     }
-    
+
     // ===== COMMIT TRANSACTION =====
     $conn->commit();
-    
+
     // ===== SIMPAN KE SESSION =====
     $_SESSION['pesanan_id'] = $pesanan_id;
     $_SESSION['nomor_antrian'] = $nomor_antrian;
     $_SESSION['metode_pembayaran'] = $metode;
     $_SESSION['bank'] = $bank;
     $_SESSION['total_pembayaran'] = $total;
-    
+
     // Clear cart
     unset($_SESSION['cart']);
-    
+
     // ===== REDIRECT BERDASARKAN METODE =====
     if ($metode == 'cash') {
         header('Location: ../status-pesanan.php');
@@ -190,7 +190,6 @@ try {
         header('Location: ../konfirmasi.php');
     }
     exit();
-    
 } catch (Exception $e) {
     // ROLLBACK jika ada error
     $conn->rollback();
@@ -200,4 +199,3 @@ try {
 } finally {
     $conn->close();
 }
-?>
