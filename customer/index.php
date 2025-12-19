@@ -10,7 +10,7 @@ include 'includes/header.php';
     <p>Nikmati Suasana Premium Kami</p>
     <div class="hero-buttons">
         <button class="btn-hero primary" onclick="window.location.href='pilih-layanan.php'">Pesan Sekarang</button>
-        <button class="btn-hero secondary" onclick="window.location.href='pilih-menu.php'">Lihat Menu</button>
+        <button class="btn-hero secondary" onclick="window.location.href='daftar-menu.php'">Lihat Menu</button>
     </div>
 </section>
 

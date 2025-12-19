@@ -61,7 +61,6 @@ if (!isAdminLoggedIn()) {
                     <p class="page-subtitle"><?php echo $page_subtitle ?? 'Welcome back, ' . getAdminName(); ?></p>
                 </div>
                 <div class="user-info">
-                    <div class="user-avatar"></div>
                     <div class="user-details">
                         <div class="user-name"><?php echo getAdminName(); ?></div>
                         <div class="user-email"><?php echo getAdminEmail(); ?></div>

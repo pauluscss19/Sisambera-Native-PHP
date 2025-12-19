@@ -73,7 +73,7 @@ $total = $subtotal;
                         </div>
 
                         <div class="bank-option" data-bank="BNI" onclick="selectBank(this, 'BNI')">
-                            <img src="https://upload.wikimedia.org/wikipedia/id/thumb/5/55/BNI_logo.svg/320px-BNI_logo.svg.png" alt="BNI" class="bank-logo">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/f0/Bank_Negara_Indonesia_logo_%282004%29.svg/120px-Bank_Negara_Indonesia_logo_%282004%29.svg.png?20250516061934" alt="BNI" class="bank-logo">
                             <div class="payment-info">
                                 <h3>BNI</h3>
                                 <p>Bank Negara Indonesia</p>
